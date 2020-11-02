@@ -28,6 +28,8 @@
 
 	/* End of the code sections */
 
+	.tohost ALIGN(0x1000) : { *(.tohost) }
+
 	/* Beginning of the read-only data sections */
 
 	. = ALIGN(0x1000); /* Ensure next section is page aligned */

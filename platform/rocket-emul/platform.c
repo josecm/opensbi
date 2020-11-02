@@ -14,7 +14,7 @@
 
 #define EMUL_PLIC_ADDR			0xc000000
 #define EMUL_PLIC_NUM_SOURCES	2
-#define EMUL_HART_COUNT			2
+#define EMUL_HART_COUNT			1
 #define EMUL_CLINT_ADDR			0x2000000
 
 static struct plic_data plic = {
@@ -95,9 +95,11 @@ static int emul_timer_init(bool cold_boot)
 	return clint_warm_timer_init();
 }
 
+void tohost_exit(uintptr_t code);
 static int emul_system_down(u32 type)
 {
 	/* For now nothing to do. */
+	tohost_exit(0);
 	return 0;
 }
 

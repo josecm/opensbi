@@ -43,10 +43,12 @@
 
 #define PK_SYS_write 64
 
-volatile uint64_t tohost __attribute__((section(".htif")));
-volatile uint64_t fromhost __attribute__((section(".htif")));
+// volatile uint64_t tohost __attribute__((section(".htif")));
+// volatile uint64_t fromhost __attribute__((section(".htif")));
 static int htif_console_buf;
 static spinlock_t htif_lock = SPIN_LOCK_INITIALIZER;
+extern volatile uint64_t tohost;
+extern volatile uint64_t fromhost;
 
 static void __check_fromhost()
 {
