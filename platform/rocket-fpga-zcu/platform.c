@@ -104,6 +104,38 @@ static int zynq_system_down(u32 type)
 	return 0;
 }
 
+static inline void sifive_cflush_dlone(uintptr_t addr, size_t len) {
+    asm volatile(
+        "csrs   mstatus, %2 \n\t"
+        "1:\n\t"
+        ".insn r 0x73, 0, 0x7e, x0, %0, x0\n\t"
+        "add %0, %0, 64\n\t"
+        "blt %0, %1, 1b\n\t"
+        "csrc   mstatus, %2 \n\t"
+        : "+r"(addr) : "r"(addr+len), "r"(MSTATUS_MPRV): "memory");
+}
+
+enum sbi_ext_zynq_fid {
+	SBI_EXT_ROCKET_CFLUSHDLONE = 0,
+};
+
+/* Vendor-Specific SBI handler */
+static int zynq_vendor_ext_provider(long extid, long funcid,
+	unsigned long *args, unsigned long *out_value,
+	struct sbi_trap_info *out_trap)
+{
+	int ret = 0;
+	switch (funcid) {
+	case SBI_EXT_ROCKET_CFLUSHDLONE:
+		sifive_cflush_dlone(args[0], args[1]);
+		break;
+	default:
+		sbi_printf("Unsupported vendor sbi call : %ld\n", funcid);
+		asm volatile("ebreak");
+	}
+	return ret;
+}
+
 const struct sbi_platform_operations platform_ops = {
 	.early_init		= zynq_early_init,
 	.final_init		= zynq_final_init,
@@ -119,6 +151,7 @@ const struct sbi_platform_operations platform_ops = {
 	.timer_event_start	= clint_timer_event_start,
 	.timer_init		= zynq_timer_init,
 	.system_reset		= zynq_system_down,
+	.vendor_ext_provider = zynq_vendor_ext_provider
 };
 
 const struct sbi_platform platform = {
