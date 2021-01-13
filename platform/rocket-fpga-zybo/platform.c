@@ -100,10 +100,9 @@ static int zynq_timer_init(bool cold_boot)
 	return clint_warm_timer_init();
 }
 
-static int zynq_system_down(u32 type)
+static void zynq_system_down(u32 reset_type, u32 reset_reason)
 {
-	/* For now nothing to do. */
-	return 0;
+
 }
 
 const struct sbi_platform_operations platform_ops = {

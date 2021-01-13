@@ -6,6 +6,8 @@
 
 #include <sbi/riscv_asm.h>
 #include <sbi/riscv_encoding.h>
+#include <sbi/sbi_console.h>
+#include <sbi/sbi_trap.h>
 #include <sbi/sbi_const.h>
 #include <sbi/sbi_platform.h>
 
@@ -98,10 +100,9 @@ static int zynq_timer_init(bool cold_boot)
 	return clint_warm_timer_init();
 }
 
-static int zynq_system_down(u32 type)
+static void zynq_system_down(u32 reset_type, u32 reset_reason)
 {
-	/* For now nothing to do. */
-	return 0;
+
 }
 
 static inline void sifive_cflush_dlone(uintptr_t addr, size_t len) {
@@ -121,13 +122,14 @@ enum sbi_ext_zynq_fid {
 
 /* Vendor-Specific SBI handler */
 static int zynq_vendor_ext_provider(long extid, long funcid,
-	unsigned long *args, unsigned long *out_value,
-	struct sbi_trap_info *out_trap)
+				   const struct sbi_trap_regs *regs,
+				   unsigned long *out_value,
+				   struct sbi_trap_info *out_trap)
 {
 	int ret = 0;
 	switch (funcid) {
 	case SBI_EXT_ROCKET_CFLUSHDLONE:
-		sifive_cflush_dlone(args[0], args[1]);
+		sifive_cflush_dlone(regs->a0, regs->a1);
 		break;
 	default:
 		sbi_printf("Unsupported vendor sbi call : %ld\n", funcid);

@@ -96,11 +96,10 @@ static int firesim_timer_init(bool cold_boot)
 }
 
 void tohost_exit(uintptr_t code);
-static int firesim_system_down(u32 type)
+static void firesim_system_down(u32 reset_type, u32 reset_reason)
 {
 	/* For now nothing to do. */
 	tohost_exit(0);
-	return 0;
 }
 
 

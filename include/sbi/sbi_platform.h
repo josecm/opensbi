@@ -40,11 +40,14 @@
 
 #ifndef __ASSEMBLY__
 
-#include <sbi/sbi_ecall.h>
+#include <sbi/sbi_ecall_interface.h>
 #include <sbi/sbi_error.h>
 #include <sbi/sbi_scratch.h>
-#include <sbi/sbi_trap.h>
 #include <sbi/sbi_version.h>
+
+struct sbi_domain;
+struct sbi_trap_info;
+struct sbi_trap_regs;
 
 /** Possible feature flags of a platform */
 enum sbi_platform_features {
@@ -89,14 +92,8 @@ struct sbi_platform_operations {
 	 */
 	int (*misa_get_xlen)(void);
 
-	/** Get number of PMP regions for given HART */
-	u32 (*pmp_region_count)(u32 hartid);
-	/**
-	 * Get PMP regions details (namely: protection, base address,
-	 * and size) for given HART
-	 */
-	int (*pmp_region_info)(u32 hartid, u32 index, ulong *prot, ulong *addr,
-			       ulong *log2size);
+	/** Initialize (or populate) domains for the platform */
+	int (*domains_init)(void);
 
 	/** Write a character to the platform console output */
 	void (*console_putc)(char ch);
@@ -141,17 +138,16 @@ struct sbi_platform_operations {
 	 */
 	int (*hart_stop)(void);
 
+	/* Check whether reset type and reason supported by the platform */
+	int (*system_reset_check)(u32 reset_type, u32 reset_reason);
 	/** Reset the platform */
-#define SBI_PLATFORM_RESET_SHUTDOWN	0
-#define SBI_PLATFORM_RESET_COLD		1
-#define SBI_PLATFORM_RESET_WARM		2
-	int (*system_reset)(u32 reset_type);
+	void (*system_reset)(u32 reset_type, u32 reset_reason);
 
 	/** platform specific SBI extension implementation probe function */
 	int (*vendor_ext_check)(long extid);
 	/** platform specific SBI extension implementation provider */
 	int (*vendor_ext_provider)(long extid, long funcid,
-				   unsigned long *args,
+				   const struct sbi_trap_regs *regs,
 				   unsigned long *out_value,
 				   struct sbi_trap_info *out_trap);
 } __packed;
@@ -457,43 +453,16 @@ static inline int sbi_platform_misa_xlen(const struct sbi_platform *plat)
 }
 
 /**
- * Get the number of PMP regions of a HART
+ * Initialize (or populate) domains for the platform
  *
  * @param plat pointer to struct sbi_platform
- * @param hartid HART ID
- *
- * @return number of PMP regions
- */
-static inline u32 sbi_platform_pmp_region_count(const struct sbi_platform *plat,
-						u32 hartid)
-{
-	if (plat && sbi_platform_ops(plat)->pmp_region_count)
-		return sbi_platform_ops(plat)->pmp_region_count(hartid);
-	return 0;
-}
-
-/**
- * Get PMP regions details (namely: protection, base address,
- * and size) of a HART
- *
- * @param plat pointer to struct sbi_platform
- * @param hartid HART ID
- * @param index index of PMP region for which we want details
- * @param prot output pointer for PMP region protection
- * @param addr output pointer for PMP region base address
- * @param log2size output pointer for log-of-2 PMP region size
  *
  * @return 0 on success and negative error code on failure
  */
-static inline int sbi_platform_pmp_region_info(const struct sbi_platform *plat,
-						u32 hartid, u32 index,
-						ulong *prot, ulong *addr,
-						ulong *log2size)
+static inline int sbi_platform_domains_init(const struct sbi_platform *plat)
 {
-	if (plat && sbi_platform_ops(plat)->pmp_region_info)
-		return sbi_platform_ops(plat)->pmp_region_info(hartid, index,
-							       prot, addr,
-							       log2size);
+	if (plat && sbi_platform_ops(plat)->domains_init)
+		return sbi_platform_ops(plat)->domains_init();
 	return 0;
 }
 
@@ -685,19 +654,38 @@ static inline void sbi_platform_timer_exit(const struct sbi_platform *plat)
 }
 
 /**
- * Reset the platform
+ * Check whether reset type and reason supported by the platform
  *
  * @param plat pointer to struct sbi_platform
  * @param reset_type type of reset
+ * @param reset_reason reason for reset
  *
- * @return 0 on success and negative error code on failure
+ * @return 0 if reset type and reason not supported and 1 if supported
  */
-static inline int sbi_platform_system_reset(const struct sbi_platform *plat,
-					    u32 reset_type)
+static inline int sbi_platform_system_reset_check(
+					    const struct sbi_platform *plat,
+					    u32 reset_type, u32 reset_reason)
+{
+	if (plat && sbi_platform_ops(plat)->system_reset_check)
+		return sbi_platform_ops(plat)->system_reset_check(reset_type,
+								  reset_reason);
+	return 0;
+}
+
+/**
+ * Reset the platform
+ *
+ * This function will not return for supported reset type and reset reason
+ *
+ * @param plat pointer to struct sbi_platform
+ * @param reset_type type of reset
+ * @param reset_reason reason for reset
+ */
+static inline void sbi_platform_system_reset(const struct sbi_platform *plat,
+					     u32 reset_type, u32 reset_reason)
 {
 	if (plat && sbi_platform_ops(plat)->system_reset)
-		return sbi_platform_ops(plat)->system_reset(reset_type);
-	return 0;
+		sbi_platform_ops(plat)->system_reset(reset_type, reset_reason);
 }
 
 /**
@@ -723,7 +711,7 @@ static inline int sbi_platform_vendor_ext_check(const struct sbi_platform *plat,
  * @param plat pointer to struct sbi_platform
  * @param extid	vendor SBI extension id
  * @param funcid SBI function id within the extension id
- * @param args pointer to arguments passed by the caller
+ * @param regs pointer to trap registers passed by the caller
  * @param out_value output value that can be filled by the callee
  * @param out_trap trap info that can be filled by the callee
  *
@@ -732,13 +720,13 @@ static inline int sbi_platform_vendor_ext_check(const struct sbi_platform *plat,
 static inline int sbi_platform_vendor_ext_provider(
 					const struct sbi_platform *plat,
 					long extid, long funcid,
-					unsigned long *args,
+					const struct sbi_trap_regs *regs,
 					unsigned long *out_value,
 					struct sbi_trap_info *out_trap)
 {
 	if (plat && sbi_platform_ops(plat)->vendor_ext_provider) {
 		return sbi_platform_ops(plat)->vendor_ext_provider(extid,
-								funcid, args,
+								funcid, regs,
 								out_value,
 								out_trap);
 	}
