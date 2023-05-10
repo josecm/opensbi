@@ -14,7 +14,9 @@
 #include <sbi_utils/fdt/fdt_helper.h>
 #include <sbi_utils/fdt/fdt_fixup.h>
 #include <sbi_utils/ipi/aclint_mswi.h>
-#include <sbi_utils/irqchip/plic.h>
+#include <sbi_utils/irqchip/fdt_irqchip.h>
+#include <sbi_utils/ipi/fdt_ipi.h>
+#include <sbi_utils/irqchip/imsic.h>
 #include <sbi_utils/serial/uart8250.h>
 #include <sbi_utils/timer/aclint_mtimer.h>
 
@@ -34,17 +36,7 @@
 #define ARIANE_ACLINT_MTIMER_ADDR		(ARIANE_CLINT_ADDR + \
 						 CLINT_MTIMER_OFFSET)
 
-static struct plic_data plic = {
-	.addr = ARIANE_PLIC_ADDR,
-	.num_src = ARIANE_PLIC_NUM_SOURCES,
-};
-
-static struct aclint_mswi_data mswi = {
-	.addr = ARIANE_ACLINT_MSWI_ADDR,
-	.size = ACLINT_MSWI_SIZE,
-	.first_hartid = 0,
-	.hart_count = ARIANE_HART_COUNT,
-};
+static bool platform_has_mlevel_imsic = false;
 
 static struct aclint_mtimer_data mtimer = {
 	.mtime_freq = ARIANE_ACLINT_MTIMER_FREQ,
@@ -97,59 +89,6 @@ static int ariane_console_init(void)
 			     ARIANE_UART_REG_OFFSET);
 }
 
-static int plic_ariane_warm_irqchip_init(int m_cntx_id, int s_cntx_id)
-{
-	int ret;
-
-	/* By default, enable all IRQs for M-mode of target HART */
-	if (m_cntx_id > -1) {
-		ret = plic_context_init(&plic, m_cntx_id, true, 0x1);
-		if (ret)
-			return ret;
-	}
-
-	/* Enable all IRQs for S-mode of target HART */
-	if (s_cntx_id > -1) {
-		ret = plic_context_init(&plic, s_cntx_id, true, 0x0);
-		if (ret)
-			return ret;
-	}
-
-	return 0;
-}
-
-/*
- * Initialize the ariane interrupt controller for current HART.
- */
-static int ariane_irqchip_init(bool cold_boot)
-{
-	u32 hartid = current_hartid();
-	int ret;
-
-	if (cold_boot) {
-		ret = plic_cold_irqchip_init(&plic);
-		if (ret)
-			return ret;
-	}
-	return plic_ariane_warm_irqchip_init(2 * hartid, 2 * hartid + 1);
-}
-
-/*
- * Initialize IPI for current HART.
- */
-static int ariane_ipi_init(bool cold_boot)
-{
-	int ret;
-
-	if (cold_boot) {
-		ret = aclint_mswi_cold_init(&mswi);
-		if (ret)
-			return ret;
-	}
-
-	return aclint_mswi_warm_init();
-}
-
 /*
  * Initialize ariane timer for current HART.
  */
@@ -166,15 +105,27 @@ static int ariane_timer_init(bool cold_boot)
 	return aclint_mtimer_warm_init();
 }
 
+static int generic_nascent_init(void)
+{
+	void *fdt;
+	fdt = fdt_get_address();
+	platform_has_mlevel_imsic = fdt_check_imsic_mlevel(fdt);
+	
+	if (platform_has_mlevel_imsic)
+		imsic_local_irqchip_init();
+	return 0;
+}
+
 /*
  * Platform descriptor.
  */
 const struct sbi_platform_operations platform_ops = {
+	.nascent_init	= generic_nascent_init,
 	.early_init = ariane_early_init,
 	.final_init = ariane_final_init,
 	.console_init = ariane_console_init,
-	.irqchip_init = ariane_irqchip_init,
-	.ipi_init = ariane_ipi_init,
+	.irqchip_init = fdt_irqchip_init,
+	.ipi_init = fdt_ipi_init,
 	.timer_init = ariane_timer_init,
 };
 
