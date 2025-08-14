@@ -402,3 +402,93 @@ int pmp_get(unsigned int n, unsigned long *prot_out, unsigned long *addr_out,
 
 	return 0;
 }
+
+int spmp_set(unsigned int n, unsigned long prot, unsigned long addr,
+	    unsigned long log2len)
+{
+	int idx;
+	unsigned long spmpcfg;
+	unsigned long addrmask, spmpaddr;
+
+	/* check parameters */
+	if (n >= PMP_COUNT || log2len > __riscv_xlen || log2len < PMP_SHIFT)
+		return SBI_EINVAL;
+
+	idx = MISELECT_SPMP_BASE_IDX + n;
+	csr_write(CSR_MISELECT, idx);
+
+	/* encode PMP config */
+	prot &= ~PMP_A;
+	prot |= (log2len == PMP_SHIFT) ? PMP_A_NA4 : PMP_A_NAPOT;
+	spmpcfg	= csr_read(CSR_MIREG2);
+	spmpcfg |= prot;
+
+	/* encode PMP address */
+	if (log2len == PMP_SHIFT) {
+		spmpaddr = (addr >> PMP_SHIFT);
+	} else {
+		if (log2len == __riscv_xlen) {
+			spmpaddr = -1UL;
+		} else {
+			addrmask = (1UL << (log2len - PMP_SHIFT)) - 1;
+			spmpaddr	 = ((addr >> PMP_SHIFT) & ~addrmask);
+			spmpaddr |= (addrmask >> 1);
+		}
+	}
+
+	/* write csrs */
+	csr_write(CSR_MIREG, spmpaddr);
+	csr_write(CSR_MIREG2, spmpcfg);
+#if __riscv_xlen == 32
+	if (n < 32)
+		csr_write(CSR_SPMPSWITCH, 1UL << n);
+	else
+		csr_write(CSR_SPMPSWITCHH, 1UL << (n-32));
+#else
+	csr_write(CSR_SPMPSWITCH, 1UL << n);
+#endif
+
+	return 0;
+}
+
+int spmp_get(unsigned int n, unsigned long *prot_out, unsigned long *addr_out,
+	    unsigned long *log2len)
+{
+	int idx;
+	unsigned long spmpcfg;
+	unsigned long t1, addr, len;
+
+	/* check parameters */
+	if (n >= PMP_COUNT || !prot_out || !addr_out || !log2len)
+		return SBI_EINVAL;
+	*prot_out = *addr_out = *log2len = 0;
+
+	idx = MISELECT_SPMP_BASE_IDX + n;
+	csr_write(CSR_MISELECT, idx);
+
+	/* decode PMP config */
+	spmpcfg	= csr_read(CSR_MIREG2);
+
+	/* decode PMP address */
+	if ((spmpcfg & PMP_A) == PMP_A_NAPOT) {
+		addr = csr_read(CSR_MIREG);
+		if (addr == -1UL) {
+			addr	= 0;
+			len	= __riscv_xlen;
+		} else {
+			t1	= ctz(~addr);
+			addr	= (addr & ~((1UL << t1) - 1)) << PMP_SHIFT;
+			len	= (t1 + PMP_SHIFT + 1);
+		}
+	} else {
+		addr = csr_read(CSR_MIREG) << PMP_SHIFT;
+		len	= PMP_SHIFT;
+	}
+
+	/* return details */
+	*prot_out    = spmpcfg;
+	*addr_out    = addr;
+	*log2len     = len;
+
+	return 0;
+}

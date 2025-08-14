@@ -42,6 +42,8 @@ enum sbi_hart_extensions {
 	SBI_HART_EXT_ZIHPM,
 	/** Hart has Smcntrpmf extension */
 	SBI_HART_EXT_SMCNTRPMF,
+	/** Hart has Sspmp extension **/
+	SBI_HART_EXT_SSPMP,
 
 	/** Maximum index of Hart extension */
 	SBI_HART_EXT_MAX,
@@ -67,6 +69,7 @@ struct sbi_hart_features {
 	int priv_version;
 	unsigned long extensions;
 	unsigned int pmp_count;
+	unsigned int spmp_count;
 	unsigned int pmp_addr_bits;
 	unsigned long pmp_gran;
 	unsigned int mhpm_mask;
@@ -90,6 +93,7 @@ void sbi_hart_delegation_dump(struct sbi_scratch *scratch,
 unsigned int sbi_hart_pmp_count(struct sbi_scratch *scratch);
 unsigned long sbi_hart_pmp_granularity(struct sbi_scratch *scratch);
 unsigned int sbi_hart_pmp_addrbits(struct sbi_scratch *scratch);
+unsigned int sbi_hart_spmp_count(struct sbi_scratch *scratch);
 unsigned int sbi_hart_mhpm_bits(struct sbi_scratch *scratch);
 int sbi_hart_pmp_configure(struct sbi_scratch *scratch);
 int sbi_hart_map_saddr(unsigned long base, unsigned long size);

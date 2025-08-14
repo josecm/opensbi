@@ -277,6 +277,17 @@ unsigned int sbi_hart_pmp_addrbits(struct sbi_scratch *scratch)
 	return hfeatures->pmp_addr_bits;
 }
 
+unsigned int sbi_hart_spmp_count(struct sbi_scratch *scratch)
+{
+	struct sbi_hart_features *hfeatures =
+			sbi_scratch_offset_ptr(scratch, hart_features_offset);
+
+	if (sbi_hart_has_extension(scratch, SBI_HART_EXT_SSPMP))
+		return hfeatures->spmp_count;
+	else
+		return 0;
+}
+
 unsigned int sbi_hart_mhpm_bits(struct sbi_scratch *scratch)
 {
 	struct sbi_hart_features *hfeatures =
@@ -375,7 +386,11 @@ static int sbi_hart_smepmp_configure(struct sbi_scratch *scratch,
 {
 	struct sbi_domain_memregion *reg;
 	struct sbi_domain *dom = sbi_domain_thishart_ptr();
+	struct sbi_hart_features *hfeatures =
+		sbi_scratch_offset_ptr(scratch, hart_features_offset);
 	unsigned int pmp_idx, pmp_flags;
+	unsigned int spmp_idx;
+	unsigned long old_val;
 
 	/*
 	 * Set the RLB so that, we can write to PMP entries without
@@ -407,6 +422,48 @@ static int sbi_hart_smepmp_configure(struct sbi_scratch *scratch,
 
 		sbi_hart_smepmp_set(scratch, dom, reg, pmp_idx++, pmp_flags,
 				    pmp_gran_log2, pmp_addr_max);
+	}
+
+	/* Configure PMP entries delegated to S-mode */
+	if (sbi_hart_has_extension(scratch, SBI_HART_EXT_SSPMP)) {
+		/* Determine the index of the first entry delegated to S-mode */
+#if __riscv_xlen == 32
+		spmp_idx = ((pmp_idx-1) & ~0x3) + 4;
+#else
+		spmp_idx = ((pmp_idx-1) & ~0x7) + 8;		
+#endif
+
+		/* Assume mpmpdeleg.pmpnum is programmable.
+		   If it is hardwired, make spmp_index = mpmpdeleg.pmpnum.
+		   Otherwise, program pmpnum with the value of spmp_idx */
+		old_val = csr_swap(CSR_MPMPDELEG, spmp_idx);
+		if (csr_read(CSR_MPMPDELEG) == old_val) {
+			/* mpmpdeleg.pmpnum is hardwired. Update index */
+			if (old_val > spmp_idx)
+				spmp_idx = old_val;
+		}
+		else {
+			/* mpmpdeleg.pmpnum is programmable. Update hfeatures->pmp_count */
+			hfeatures->pmp_count = spmp_idx;
+		}
+
+		/* Determine the last entry delegated to S-mode */
+		while (spmp_idx < 64)
+		{
+			csr_write(CSR_MISELECT, spmp_idx + MISELECT_SPMP_BASE_IDX);
+			old_val = csr_swap(CSR_MIREG, -1UL);
+			spmp_idx++;
+			if (csr_read(CSR_MIREG) == old_val)
+				break;
+			else {
+				csr_write(CSR_MIREG, 0);
+			}
+		}
+		hfeatures->spmp_count = spmp_idx - hfeatures->pmp_count;
+		
+		/* Configure the last SPMP entry as S-mode RWX for the whole address space */
+		pmp_flags = PMP_R | PMP_W | PMP_X;
+		spmp_set(spmp_idx-1, pmp_flags, 0, __riscv_xlen);
 	}
 
 	/* Set the MML to enforce new encoding */
@@ -450,7 +507,11 @@ static int sbi_hart_oldpmp_configure(struct sbi_scratch *scratch,
 {
 	struct sbi_domain_memregion *reg;
 	struct sbi_domain *dom = sbi_domain_thishart_ptr();
+	struct sbi_hart_features *hfeatures =
+		sbi_scratch_offset_ptr(scratch, hart_features_offset);
 	unsigned int pmp_idx = 0;
+	unsigned int spmp_idx;
+	unsigned long old_val;
 	unsigned int pmp_flags;
 	unsigned long pmp_addr;
 
@@ -483,6 +544,48 @@ static int sbi_hart_oldpmp_configure(struct sbi_scratch *scratch,
 				   "is not in range.\n", dom->name, reg->base,
 				   reg->order);
 		}
+	}
+
+	/* Configure PMP entries delegated to S-mode */
+	if (sbi_hart_has_extension(scratch, SBI_HART_EXT_SSPMP)) {
+		/* Determine the index of the first entry delegated to S-mode */
+#if __riscv_xlen == 32
+		spmp_idx = ((pmp_idx-1) & ~0x3) + 4;
+#else
+		spmp_idx = ((pmp_idx-1) & ~0x7) + 8;		
+#endif
+
+		/* Assume mpmpdeleg.pmpnum is programmable.
+		   If it is hardwired, make spmp_index = mpmpdeleg.pmpnum.
+		   Otherwise, program pmpnum with the value of spmp_idx */
+		old_val = csr_swap(CSR_MPMPDELEG, spmp_idx);
+		if (csr_read(CSR_MPMPDELEG) == old_val) {
+			/* mpmpdeleg.pmpnum is hardwired. Update index */
+			if (old_val > spmp_idx)
+				spmp_idx = old_val;
+		}
+		else {
+			/* mpmpdeleg.pmpnum is programmable. Update hfeatures->pmp_count */
+			hfeatures->pmp_count = spmp_idx;
+		}
+
+		/* Determine the last entry delegated to S-mode */
+		while (spmp_idx < 64)
+		{
+			csr_write(CSR_MISELECT, spmp_idx + MISELECT_SPMP_BASE_IDX);
+			old_val = csr_swap(CSR_MIREG, -1UL);
+			spmp_idx++;
+			if (csr_read(CSR_MIREG) == old_val)
+				break;
+			else {
+				csr_write(CSR_MIREG, 0);
+			}
+		}
+		hfeatures->spmp_count = spmp_idx - hfeatures->pmp_count;
+		
+		/* Configure the last SPMP entry as S-mode RWX for the whole address space */
+		pmp_flags = PMP_R | PMP_W | PMP_X;
+		spmp_set(spmp_idx-1, pmp_flags, 0, __riscv_xlen);
 	}
 
 	return 0;
@@ -683,6 +786,9 @@ static inline char *sbi_hart_extension_id2string(int ext)
 		break;
 	case SBI_HART_EXT_SMCNTRPMF:
 		estr = "smcntrpmf";
+		break;
+	case SBI_HART_EXT_SSPMP:
+		estr = "sspmp";
 		break;
 	default:
 		break;
@@ -954,6 +1060,14 @@ __pmp_skip:
 		if (!trap.cause)
 			__sbi_hart_update_extension(hfeatures,
 					SBI_HART_EXT_SMCNTRPMF, true);
+	}
+
+	/* Detect if hart supports mpmpdeleg CSR(Sspmp extension) */
+	if (hfeatures->priv_version >= SBI_HART_PRIV_VER_1_12) {
+		csr_read_allowed(CSR_MPMPDELEG, (unsigned long)&trap);
+		if (!trap.cause)
+			__sbi_hart_update_extension(hfeatures,
+					SBI_HART_EXT_SSPMP, true);
 	}
 
 	/* Let platform populate extensions */

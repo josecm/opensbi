@@ -176,6 +176,8 @@ static void sbi_boot_print_hart(struct sbi_scratch *scratch, u32 hartid)
 	sbi_printf("Boot HART ISA Extensions  : %s\n", str);
 	sbi_printf("Boot HART PMP Count       : %d\n",
 		   sbi_hart_pmp_count(scratch));
+	sbi_printf("Boot HART SPMP Count      : %d\n",
+		   sbi_hart_spmp_count(scratch));
 	sbi_printf("Boot HART PMP Granularity : %lu\n",
 		   sbi_hart_pmp_granularity(scratch));
 	sbi_printf("Boot HART PMP Address Bits: %d\n",
@@ -386,8 +388,6 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
 
 	sbi_boot_print_domains(scratch);
 
-	sbi_boot_print_hart(scratch, hartid);
-
 	/*
 	 * Configure PMP at last because if SMEPMP is detected,
 	 * M-mode access to the S/U space will be rescinded.
@@ -398,6 +398,8 @@ static void __noreturn init_coldboot(struct sbi_scratch *scratch, u32 hartid)
 			   __func__, rc);
 		sbi_hart_hang();
 	}
+
+	sbi_boot_print_hart(scratch, hartid);
 
 	wake_coldboot_harts(scratch, hartid);
 

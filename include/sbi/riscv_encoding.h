@@ -149,6 +149,9 @@
 #define PMP_A_NAPOT			_UL(0x18)
 #define PMP_L				_UL(0x80)
 
+#define SPMP_U				_UL(0x100)
+#define SPMP_SHARED			_UL(0x200)
+
 #define PMP_SHIFT			2
 #define PMP_COUNT			64
 #if __riscv_xlen == 64
@@ -333,9 +336,16 @@
 /* Supervisor Protection and Translation */
 #define CSR_SATP			0x180
 
-/* Supervisor-Level Window to Indirectly Accessed Registers (AIA) */
-#define CSR_SISELECT			0x150
+/* Sscsrind Extension */
+#define CSR_SISELECT		0x150
 #define CSR_SIREG			0x151
+#define CSR_SIREG2			0x152
+#define CSR_SIREG3			0x153
+#define CSR_SIREG4			0x155
+#define CSR_SIREG5			0x156
+#define CSR_SIREG6			0x157
+
+#define SISELECT_SPMP_BASE_IDX 	0x0
 
 /* Supervisor-Level Interrupts (AIA) */
 #define CSR_STOPEI			0x15c
@@ -693,9 +703,16 @@
 #define CSR_DSCRATCH0			0x7b2
 #define CSR_DSCRATCH1			0x7b3
 
-/* Machine-Level Window to Indirectly Accessed Registers (AIA) */
-#define CSR_MISELECT			0x350
+/* Smcsrind Extension */
+#define CSR_MISELECT		0x350
 #define CSR_MIREG			0x351
+#define CSR_MIREG2			0x352
+#define CSR_MIREG3			0x353
+#define CSR_MIREG4			0x355
+#define CSR_MIREG5			0x356
+#define CSR_MIREG6			0x357
+
+#define MISELECT_SPMP_BASE_IDX 	0x0
 
 /* Machine-Level Interrupts (AIA) */
 #define CSR_MTOPEI			0x35c
@@ -722,6 +739,12 @@
 #define CSR_MVIENH			0x318
 #define CSR_MVIPH			0x319
 #define CSR_MIPH			0x354
+
+/* Sspmp extension registers */
+#define CSR_MPMPDELEG		0x3F0
+#define CSR_SPMPDELEG		0x1F0
+#define CSR_SPMPSWITCH		0x550
+#define CSR_SPMPSWITCHH		0x551
 
 /* ===== Trap/Exception Causes ===== */
 

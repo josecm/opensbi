@@ -193,6 +193,12 @@ int pmp_set(unsigned int n, unsigned long prot, unsigned long addr,
 int pmp_get(unsigned int n, unsigned long *prot_out, unsigned long *addr_out,
 	    unsigned long *log2len);
 
+int spmp_set(unsigned int n, unsigned long prot, unsigned long addr,
+	    unsigned long log2len);
+
+int spmp_get(unsigned int n, unsigned long *prot_out, unsigned long *addr_out,
+	    unsigned long *log2len);
+
 #endif /* !__ASSEMBLER__ */
 
 #endif
