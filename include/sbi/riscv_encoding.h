@@ -742,7 +742,7 @@
 
 /* Sspmp extension registers */
 #define CSR_MPMPDELEG		0x3F0
-#define CSR_SPMPDELEG		0x1F0
+#define CSR_HSPMPDELEG		0x681
 #define CSR_SPMPSWITCH		0x550
 #define CSR_SPMPSWITCHH		0x551
 

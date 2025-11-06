@@ -568,24 +568,57 @@ static int sbi_hart_oldpmp_configure(struct sbi_scratch *scratch,
 			/* mpmpdeleg.pmpnum is programmable. Update hfeatures->pmp_count */
 			hfeatures->pmp_count = spmp_idx;
 		}
+		spmp_idx = 0;
 
-		/* Determine the last entry delegated to S-mode */
-		while (spmp_idx < 64)
-		{
-			csr_write(CSR_MISELECT, spmp_idx + MISELECT_SPMP_BASE_IDX);
-			old_val = csr_swap(CSR_MIREG, -1UL);
-			spmp_idx++;
-			if (csr_read(CSR_MIREG) == old_val)
-				break;
+		/* Determine the number of SPMP entries delegated to [H]S-mode */
+
+		/* If H extension is enabled, we need to check whether hspmpdeleg.pmpnum is hardwired */
+		if (misa_extension('H')) {
+			old_val = csr_swap(CSR_HSPMPDELEG, 0x8);
+			if (csr_read(CSR_HSPMPDELEG) == old_val) {
+				/* hspmpdeleg.pmpnum is hardwired.
+					The number of PMP entries delegated to HS-mode is hspmpdeleg.pmpnum */
+				hfeatures->spmp_count = old_val;
+			}
 			else {
-				csr_write(CSR_MIREG, 0);
+				/* hspmpdeleg.pmpnum is programmable. Get last writable entry */
+				while (spmp_idx < 64)
+				{
+					csr_write(CSR_MISELECT, spmp_idx + MISELECT_SPMP_BASE_IDX);
+					old_val = csr_swap(CSR_MIREG, -1UL);
+					spmp_idx++;
+					if (csr_read(CSR_MIREG) == old_val)
+						break;
+					else {
+						csr_write(CSR_MIREG, 0);
+					}
+				}
+				hfeatures->spmp_count = spmp_idx;
 			}
 		}
-		hfeatures->spmp_count = spmp_idx - hfeatures->pmp_count;
+		/* If H extension is disabled, the last entry delegated to S-mode 
+			will always be the last writable entry */
+		else {
+				while (spmp_idx < 64)
+				{
+					csr_write(CSR_MISELECT, spmp_idx + MISELECT_SPMP_BASE_IDX);
+					old_val = csr_swap(CSR_MIREG, -1UL);
+					spmp_idx++;
+					if (csr_read(CSR_MIREG) == old_val)
+						break;
+					else {
+						csr_write(CSR_MIREG, 0);
+					}
+				}
+				hfeatures->spmp_count = spmp_idx;
+		}
+
+		/* Determine the last entry delegated to S-mode */
+		spmp_idx = hfeatures->spmp_count - 1;
 		
 		/* Configure the last SPMP entry as S-mode RWX for the whole address space */
 		pmp_flags = PMP_R | PMP_W | PMP_X;
-		spmp_set(spmp_idx-1, pmp_flags, 0, __riscv_xlen);
+		spmp_set(spmp_idx, pmp_flags, 0, __riscv_xlen);
 	}
 
 	return 0;
