@@ -345,7 +345,7 @@
 #define CSR_SIREG5			0x156
 #define CSR_SIREG6			0x157
 
-#define SISELECT_SPMP_BASE_IDX 	0x0
+#define SISELECT_SPMP_BASE_IDX 	0x100
 
 /* Supervisor-Level Interrupts (AIA) */
 #define CSR_STOPEI			0x15c
@@ -712,7 +712,7 @@
 #define CSR_MIREG5			0x356
 #define CSR_MIREG6			0x357
 
-#define MISELECT_SPMP_BASE_IDX 	0x0
+#define MISELECT_SPMP_BASE_IDX 	0x100
 
 /* Machine-Level Interrupts (AIA) */
 #define CSR_MTOPEI			0x35c
