@@ -574,7 +574,7 @@ static int sbi_hart_oldpmp_configure(struct sbi_scratch *scratch,
 
 		/* If H extension is enabled, we need to check whether hspmpdeleg.pmpnum is hardwired */
 		if (misa_extension('H')) {
-			old_val = csr_swap(CSR_HSPMPDELEG, 0x8);
+			old_val = csr_swap(CSR_HSPMPDELEG, ~0UL);
 			if (csr_read(CSR_HSPMPDELEG) == old_val) {
 				/* hspmpdeleg.pmpnum is hardwired.
 					The number of PMP entries delegated to HS-mode is hspmpdeleg.pmpnum */
