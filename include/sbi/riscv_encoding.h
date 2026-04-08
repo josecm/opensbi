@@ -741,10 +741,10 @@
 #define CSR_MIPH			0x354
 
 /* Sspmp extension registers */
-#define CSR_MPMPDELEG		0x3F0
-#define CSR_HSPMPDELEG		0x681
-#define CSR_SPMPSWITCH		0x550
-#define CSR_SPMPSWITCHH		0x551
+#define CSR_MPMPDELEG		0x316
+#define CSR_HSPMPDELEG		0x616
+#define CSR_SPMPSWITCH		0x183
+#define CSR_SPMPSWITCHH		0x193
 
 /* ===== Trap/Exception Causes ===== */
 
